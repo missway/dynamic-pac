@@ -1,0 +1,52 @@
+name: Update Mirror PAC
+
+on:
+  schedule:
+    # 上游 zhiyi7/gfw-pac 每周四 00:10 (UTC) 更新，这里延迟 1 小时后同步
+    - cron: '30 1 * * 4'
+  workflow_dispatch:
+
+jobs:
+  update-mirror:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download upstream gfw.pac
+        id: download
+        run: |
+          for url in \
+            https://raw.githubusercontent.com/zhiyi7/gfw-pac/master/gfw.pac \
+            https://raw.githubusercontent.com/zhiyi7/gfw-pac/main/gfw.pac; do
+            if curl -fsSL --max-time 60 "$url" -o /tmp/gfw.pac; then
+              echo "upstream=$url" >> "$GITHUB_OUTPUT"
+              echo "downloaded=true" >> "$GITHUB_OUTPUT"
+              break
+            fi
+          done
+          if [ "${{ steps.download.outputs.downloaded }}" != "true" ]; then
+            echo "::warning::upstream unreachable, keep existing mirror"
+            exit 0
+          fi
+
+      - name: Update mirror and snapshot
+        if: steps.download.outputs.downloaded == 'true'
+        run: |
+          cp /tmp/gfw.pac mirror/gfw.pac
+          node -e "const fs=require('fs');const pac=fs.readFileSync('mirror/gfw.pac','utf8');fs.writeFileSync('worker/snapshot.js','export const SNAPSHOT = ' + JSON.stringify(pac) + ';\n');"
+
+      - name: Commit and push
+        if: steps.download.outputs.downloaded == 'true'
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mirror/gfw.pac worker/snapshot.js
+          if git diff --cached --quiet; then
+            echo "no changes"
+          else
+            git commit -m "chore: sync upstream gfw.pac ($(date -u +%Y-%m-%d))"
+            git push
+          fi

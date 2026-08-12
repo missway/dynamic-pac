@@ -1,0 +1,8 @@
+name = "dynamic-pac"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+# 修改为自己的仓库地址后重新部署：
+#   https://raw.githubusercontent.com/<owner>/<repo>/main/mirror/gfw.pac
+[vars]
+MIRROR_URL = "https://raw.githubusercontent.com/missway/dynamic-pac/main/mirror/gfw.pac"
