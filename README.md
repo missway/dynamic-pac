@@ -8,6 +8,38 @@ https://<你的-worker>/pac/?PROXY=127.0.0.1:7890
 
 规则每周四由 GitHub Actions 从上游自动镜像，无需手动更新；代理地址由你通过 URL 参数注入，互不干扰。
 
+## 快速使用（两种方式）
+
+### 方式一：本地 PAC 服务器（国内直连可用，无需域名）
+
+> `workers.dev` 域名在国内**直连不可达**，浏览器/系统拉取 PAC 走的是直连，因此默认的 Worker 端点在国内无法使用。本地服务器读本仓库的 `mirror/gfw.pac` 并在 `127.0.0.1` 提供服务，永远可达。
+
+```bash
+node server.mjs            # 默认端口 8080；PORT=9090 node server.mjs 自定义端口
+```
+
+PAC 地址栏填入：
+
+```
+http://127.0.0.1:8080/pac/?PROXY=127.0.0.1:7890
+```
+
+手动拉取最新上游规则（jsDelivr CDN，国内可达）：
+
+```
+curl http://127.0.0.1:8080/refresh
+```
+
+### 方式二：Cloudflare Worker（需绑定自定义域名）
+
+部署后填入：
+
+```
+https://<你的域名>/pac/?PROXY=127.0.0.1:7890
+```
+
+`workers.dev` 默认域名在国内不稳定/不可达，务必绑定自定义域名后再用于实际使用。
+
 ## 原理
 
 ```
@@ -79,6 +111,7 @@ npx wrangler deploy
 ## 目录结构
 
 ```
+├── server.mjs                 # 本地 PAC 服务器（国内直连可用，读 mirror/ 并可 /refresh）
 ├── worker/                    # Cloudflare Worker
 │   ├── wrangler.toml          # 部署配置 + MIRROR_URL（指向本仓库镜像）
 │   ├── index.js               # 入口：参数解析 → 拉镜像 → 注入 → 返回
