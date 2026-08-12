@@ -18,7 +18,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { normalizeProxy, renderPac, PROXY_RE } from './worker/lib.js';
+import { buildPac, normalizeProxy, PROXY_RE, PAC_PATHS } from './worker/lib.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIRROR_FILE = path.join(__dirname, 'mirror', 'gfw.pac');
@@ -59,7 +59,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (url.pathname !== '/pac' && url.pathname !== '/pac/') {
+  if (url.pathname !== '/pac' && url.pathname !== '/pac/' && url.pathname !== '/dynamic-pac' && url.pathname !== '/dynamic-pac/') {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('404 Not Found\n');
     return;
@@ -83,7 +83,7 @@ const server = http.createServer(async (req, res) => {
   let out;
   try {
     const pac = readMirror();
-    out = renderPac(pac, proxy);
+    out = buildPac(pac, proxy);
   } catch (e) {
     res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('mirror/gfw.pac not found or unreadable: ' + e.message + '\n');
@@ -105,5 +105,5 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`dynamic-pac local server on http://127.0.0.1:${PORT}`);
-  console.log(`PAC URL: http://127.0.0.1:${PORT}/pac/?PROXY=127.0.0.1:7890`);
+  console.log(`PAC URL: http://127.0.0.1:${PORT}/dynamic-pac/?PROXY=127.0.0.1:7890`);
 });

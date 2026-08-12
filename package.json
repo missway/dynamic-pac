@@ -1,0 +1,12 @@
+{
+  "name": "dynamic-pac",
+  "private": true,
+  "scripts": {
+    "test": "node test_worker.mjs",
+    "server": "node server.mjs",
+    "deploy": "npm --prefix worker run deploy"
+  },
+  "devDependencies": {
+    "acorn": "^8.11.0"
+  }
+}

@@ -3,16 +3,26 @@
 动态 PAC 端点。基于 [zhiyi7/gfw-pac](https://github.com/zhiyi7/gfw-pac) 的最新规则，通过在 URL 中带上你的代理地址，即可在 PAC 地址栏填入一个**动态地址**使用：
 
 ```
-https://<你的-worker>/pac/?PROXY=127.0.0.1:7890
+https://www.andyliang.in/dynamic-pac/?PROXY=127.0.0.1:7890
 ```
 
 规则每周四由 GitHub Actions 从上游自动镜像，无需手动更新；代理地址由你通过 URL 参数注入，互不干扰。
 
+> **IE10 / Windows7 支持**：上游模板使用 ES6 语法（`new Map`/`endsWith`/默认参数），IE10 的 JScript 引擎解析会直接失败。本服务在返回前自动做 **ES5 转换**（注入 polyfill + 改写默认参数），已在 IE10 兼容引擎验证。
+
 ## 快速使用（两种方式）
 
-### 方式一：本地 PAC 服务器（国内直连可用，无需域名）
+### 方式一：Cloudflare Worker + 自定义域名（推荐）
 
-> `workers.dev` 域名在国内**直连不可达**，浏览器/系统拉取 PAC 走的是直连，因此默认的 Worker 端点在国内无法使用。本地服务器读本仓库的 `mirror/gfw.pac` 并在 `127.0.0.1` 提供服务，永远可达。
+已部署，PAC 地址栏填入：
+
+```
+https://www.andyliang.in/dynamic-pac/?PROXY=127.0.0.1:7890
+```
+
+### 方式二：本地 PAC 服务器（备用，无需域名）
+
+> `workers.dev` 域名在国内**直连不可达**；本地服务器读本仓库的 `mirror/gfw.pac` 并在 `127.0.0.1` 提供服务，永远可达。
 
 ```bash
 node server.mjs            # 默认端口 8080；PORT=9090 node server.mjs 自定义端口
@@ -21,7 +31,7 @@ node server.mjs            # 默认端口 8080；PORT=9090 node server.mjs 自�
 PAC 地址栏填入：
 
 ```
-http://127.0.0.1:8080/pac/?PROXY=127.0.0.1:7890
+http://127.0.0.1:8080/dynamic-pac/?PROXY=127.0.0.1:7890
 ```
 
 手动拉取最新上游规则（jsDelivr CDN，国内可达）：
@@ -30,24 +40,16 @@ http://127.0.0.1:8080/pac/?PROXY=127.0.0.1:7890
 curl http://127.0.0.1:8080/refresh
 ```
 
-### 方式二：Cloudflare Worker（需绑定自定义域名）
-
-部署后填入：
-
-```
-https://<你的域名>/pac/?PROXY=127.0.0.1:7890
-```
-
-`workers.dev` 默认域名在国内不稳定/不可达，务必绑定自定义域名后再用于实际使用。
-
 ## 原理
 
 ```
-PAC 地址栏: https://<worker>.workers.dev/pac/?PROXY=127.0.0.1:7890
+PAC 地址栏: https://www.andyliang.in/dynamic-pac/?PROXY=127.0.0.1:7890
       │  Cloudflare Worker
       │   ├─ 解析/归一化/校验 PROXY (防注入)
       │   ├─ 拉取 本仓库 mirror/gfw.pac (1 小时边缘缓存)
-      │   └─ 失败 → 内嵌 snapshot.js 兜底 → 替换 var proxy 注入 → 返回(no-store)
+      │   ├─ 失败 → 内嵌 snapshot.js 兜底
+      │   ├─ 替换 var proxy 注入 → ES5 转换(兼容 IE10/Windows7)
+      │   └─ 返回 (no-store + application/x-ns-proxy-autoconfig)
       ▼
    本仓库 mirror/gfw.pac  ← 每周四由 GitHub Actions 从 zhiyi7/gfw-pac 同步
 ```
@@ -83,14 +85,14 @@ npx wrangler deploy
 
 ### 3. 使用
 
-在系统/浏览器的 PAC 地址栏填入：
+在系统/浏览器的 PAC 地址栏填入（把 `<host>` 换成 `www.andyliang.in/dynamic-pac` 或本地 `127.0.0.1:8080/dynamic-pac`）：
 
 | 目的 | 地址 |
 | --- | --- |
-| HTTP 代理 | `https://<worker>.workers.dev/pac/?PROXY=127.0.0.1:7890` |
-| SOCKS5 代理 | `https://<worker>.workers.dev/pac/?PROXY=SOCKS5%20127.0.0.1:1080` |
-| 多代理（; 分隔，按顺序回退） | `https://<worker>.workers.dev/pac/?PROXY=PROXY%20127.0.0.1:7890;SOCKS5%20127.0.0.1:1080` |
-| 缺省（不填 PROXY，默认 127.0.0.1:7890） | `https://<worker>.workers.dev/pac/` |
+| HTTP 代理 | `https://<host>/?PROXY=127.0.0.1:7890` |
+| SOCKS5 代理 | `https://<host>/?PROXY=SOCKS5%20127.0.0.1:1080` |
+| 多代理（; 分隔，按顺序回退） | `https://<host>/?PROXY=PROXY%20127.0.0.1:7890;SOCKS5%20127.0.0.1:1080` |
+| 缺省（不填 PROXY，默认 127.0.0.1:7890） | `https://<host>/` |
 
 参数说明：
 
@@ -99,8 +101,16 @@ npx wrangler deploy
 - 多个代理用 `;` 分隔（URL 中空格请编码为 `%20` 或 `+`）。
 - 非法参数返回 `400`；不存在的路径返回 `404`；上游格式变化返回 `502`。
 
-> 提示：`workers.dev` 域名在国内可能不稳定，可在 Cloudflare 绑定自定义域名后使用
-> `https://<你的域名>/pac/?PROXY=...`。
+> `workers.dev` 域名在国内直连不可达，请使用上面的自定义域名地址（`www.andyliang.in/dynamic-pac`）。
+
+## ES5 兼容（IE10 / Windows7）
+
+上游 [zhiyi7/gfw-pac](https://github.com/zhiyi7/gfw-pac) 模板包含 ES6 语法（`new Map`、`String.prototype.endsWith`、函数默认参数），在 IE10 的 JScript PAC 引擎中会**整文件解析失败**。`worker/lib.js` 的 `applyEs5Compat` 在返回前自动处理：
+
+- 注入 `Map` / `endsWith` / `some` 的 ES5 polyfill（仅在缺失时生效，现代浏览器不受影响）；
+- 改写 `debug` 的默认参数签名。
+
+`npm test` 会用 acorn 以 `ecmaVersion: 5` 对产物做严格解析，确保 IE10 兼容。若上游更新后引入新的 ES6 语法导致测试失败，说明需要扩展转换逻辑。
 
 ## 规则更新
 
@@ -113,15 +123,16 @@ npx wrangler deploy
 ```
 ├── server.mjs                 # 本地 PAC 服务器（国内直连可用，读 mirror/ 并可 /refresh）
 ├── worker/                    # Cloudflare Worker
-│   ├── wrangler.toml          # 部署配置 + MIRROR_URL（指向本仓库镜像）
-│   ├── index.js               # 入口：参数解析 → 拉镜像 → 注入 → 返回
-│   ├── lib.js                 # 纯函数：normalizeProxy / renderPac（可单测）
+│   ├── wrangler.toml          # 部署配置 + 自定义域名路由 + MIRROR_URL
+│   ├── index.js               # 入口：参数解析 → 拉镜像 → 注入+ES5 → 返回
+│   ├── lib.js                 # 纯函数：normalizeProxy / buildPac / applyEs5Compat
 │   └── snapshot.js            # 内嵌兜底（由同步工作流生成）
 ├── mirror/gfw.pac             # 上游同步的镜像 PAC（每周自动更新）
+├── package.json               # devDep: acorn（ES5 解析测试）
 ├── .github/workflows/
 │   ├── update-mirror.yml      # 每周同步镜像 + 刷新快照
 │   └── deploy-worker.yml      # wrangler 部署
-└── test_worker.mjs            # 本地测试：node test_worker.mjs
+└── test_worker.mjs            # 本地测试：npm test
 ```
 
 ## 本地测试
